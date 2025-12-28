@@ -72,4 +72,4 @@ neo4j/
 Thumbs.db
 
 # Output artifacts (optional - uncomment if you don't want to track these)
-# outputs/
+# outputs/*.sh
