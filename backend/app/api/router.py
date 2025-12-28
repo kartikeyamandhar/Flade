@@ -528,12 +528,25 @@ def process_document_sync(file_path: str, document_id: str):
             })
         
         logger.info(f"✓ Background processing complete for {document_id}")
-    
+        
     except Exception as e:
-        logger.error(f"Background processing failed for {document_id}: {e}")
-        if document_id in documents_db:
-            documents_db[document_id]["status"] = DocumentStatus.FAILED
-            documents_db[document_id]["error"] = str(e)
+        error_str = str(e)
+        
+        # Check if rejection
+        if error_str.startswith("DOCUMENT_TYPE_REJECTED:"):
+            parts = error_str.split(":", 2)
+            rejection_msg = parts[2] if len(parts) > 2 else "Document type not supported"
+            
+            logger.warning(f"📄 Document {document_id} rejected")
+            if document_id in documents_db:
+                documents_db[document_id]["status"] = DocumentStatus.FAILED
+                documents_db[document_id]["error"] = rejection_msg
+                documents_db[document_id]["error_message"] = rejection_msg
+        else:
+            logger.error(f"Background processing failed for {document_id}: {e}")
+            if document_id in documents_db:
+                documents_db[document_id]["status"] = DocumentStatus.FAILED
+                documents_db[document_id]["error"] = str(e)
 
 
 async def process_document_in_thread(file_path: str, document_id: str):
@@ -559,15 +572,16 @@ async def get_processing_status(document_id: str):
             if document_id in documents_db:
                 doc_info = documents_db[document_id]
                 status = {
-                    "document_id": document_id,
-                    "status": doc_info["status"],
-                    "progress_percent": doc_info.get("progress_percent", 100 if doc_info["status"] == "completed" else 0),
-                    "current_step": doc_info.get("current_step", "Complete" if doc_info["status"] == "completed" else "Unknown"),
-                    "chunks_processed": doc_info.get("chunks", 0),
-                    "total_chunks": doc_info.get("chunks", 0),
-                    "entities_extracted": doc_info.get("entities", 0),
-                    "relationships_created": doc_info.get("relationships", 0),
-                }
+                            "document_id": document_id,
+                            "status": doc_info["status"],
+                            "progress_percent": doc_info.get("progress_percent", 100 if doc_info["status"] == "completed" else 0),
+                            "current_step": doc_info.get("current_step", "Complete" if doc_info["status"] == "completed" else "Unknown"),
+                            "chunks_processed": doc_info.get("chunks", 0),
+                            "total_chunks": doc_info.get("chunks", 0),
+                            "entities_extracted": doc_info.get("entities", 0),
+                            "relationships_created": doc_info.get("relationships", 0),
+                            "error_message": doc_info.get("error") or doc_info.get("error_message")
+                        }
             else:
                 raise HTTPException(404, "Document not found")
         
