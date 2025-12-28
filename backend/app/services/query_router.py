@@ -1,0 +1,150 @@
+# """
+# Query Router.
+# Classifies questions and determines the best retrieval method.
+# """
+
+# from typing import Dict, Tuple
+# from llama_index.llms.openai import OpenAI
+# import logging
+
+# logger = logging.getLogger(__name__)
+
+
+# class QueryRouter:
+#     """Route questions to appropriate retrieval method."""
+    
+#     def __init__(self, llm: OpenAI):
+#         """
+#         Initialize the query router.
+        
+#         Args:
+#             llm: OpenAI LLM instance for classification
+#         """
+#         self.llm = llm
+    
+#     def classify_query(self, question: str) -> Tuple[str, str]:
+#         """
+#         Classify question and determine retrieval strategy.
+        
+#         Args:
+#             question: User's question
+            
+#         Returns:
+#             Tuple of (retrieval_method, reasoning)
+#         """
+#         try:
+#             classification_prompt = f"""
+# Classify this question and determine the best retrieval method.
+
+# Question: "{question}"
+
+# Retrieval Methods:
+# 1. "vector" - For semantic/conceptual questions, finding similar content
+#    Examples: "What are safety precautions?", "How to troubleshoot?"
+   
+# 2. "graph" - For relationship/connection questions 
+#    Examples: "What components are compatible?", "List all requirements"
+   
+# 3. "text2cypher" - For analytical/counting questions
+#    Examples: "How many safety warnings?", "What's the specification for X?"
+   
+# 4. "web_search" - For current info not in manual
+#    Examples: "What's the current price?", "Recent recalls?"
+
+# Respond ONLY with: method|reasoning
+# Example: vector|This is asking about conceptual safety information
+# """
+            
+#             response = self.llm.complete(classification_prompt)
+#             result = response.text.strip()
+            
+#             if "|" in result:
+#                 method, reasoning = result.split("|", 1)
+#                 method = method.strip().lower()
+                
+#                 # Validate method
+#                 valid_methods = ["vector", "graph", "text2cypher", "web_search"]
+#                 if method not in valid_methods:
+#                     method = "vector"  # Default fallback
+                
+#                 logger.info(f"Query classified as: {method}")
+#                 return method, reasoning.strip()
+#             else:
+#                 return "vector", "Default to vector search"
+        
+#         except Exception as e:
+#             logger.error(f"Query classification failed: {e}")
+#             return "vector", "Fallback to vector search"
+
+"""
+Query Router - Simple Version (Workaround).
+Uses keyword-based classification instead of LLM to avoid API issues.
+"""
+
+from typing import Tuple
+import logging
+import re
+
+logger = logging.getLogger(__name__)
+
+
+class QueryRouter:
+    """Route questions to appropriate retrieval method using keyword matching."""
+    
+    def __init__(self, llm=None):
+        """
+        Initialize the query router.
+        
+        Args:
+            llm: Not used in simple version (for API compatibility)
+        """
+        self.llm = llm  # Keep for compatibility but don't use
+        
+        # Define keyword patterns for each method
+        self.patterns = {
+            'text2cypher': [
+                r'\bhow many\b', r'\bcount\b', r'\bnumber of\b',
+                r'\bhow much\b', r'\btotal\b', r'\blist all\b',
+                r'\bshow all\b', r'\bfind all\b'
+            ],
+            'graph': [
+                r'\bconnect', r'\brelat', r'\bcompat',
+                r'\brequire', r'\bdepend', r'\blink',
+                r'\bpart of\b', r'\bbelongs to\b', r'\buses\b',
+                r'\bwhat.*with\b', r'\bwhich.*with\b'
+            ],
+            'web_search': [
+                r'\bcurrent\b', r'\blatest\b', r'\brecent\b',
+                r'\bprice\b', r'\bcost\b', r'\btoday\b',
+                r'\bnow\b', r'\bmarket\b', r'\bupdate'
+            ]
+        }
+    
+    def classify_query(self, question: str) -> Tuple[str, str]:
+        """
+        Classify question using keyword matching.
+        
+        Args:
+            question: User's question
+            
+        Returns:
+            Tuple of (retrieval_method, reasoning)
+        """
+        question_lower = question.lower()
+        
+        # Check each method's patterns
+        for method, patterns in self.patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, question_lower):
+                    reasoning = f"Keyword match: detected {method} query pattern"
+                    logger.info(f"Query classified as: {method} (keyword-based)")
+                    return method, reasoning
+        
+        # Default to vector search
+        reasoning = "Default to vector search for semantic similarity"
+        logger.info("Query classified as: vector (default)")
+        return "vector", reasoning
+
+
+# Backward compatibility - keep the class name the same
+SimpleQueryRouter = QueryRouter
