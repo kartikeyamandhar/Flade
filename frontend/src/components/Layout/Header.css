@@ -1,44 +1,41 @@
-.header {
-  background: #0a0a0a;
-  border-bottom: 1px solid #2a2a2a;
-  padding: 16px 24px;
-}
-
-.header-content {
-  max-width: 1400px;
-  margin: 0 auto;
+.app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 15px 30px;
+  background: #000000;
+  border-bottom: 1px solid #1a1a1a;
 }
 
-.header-title {
-  font-size: 28px;
+.header-logo {
+  font-size: 1.8rem;
   font-weight: 700;
-  color: #00BFFF; /* Sky Blue - DeepSkyBlue */
-  margin: 0;
-  letter-spacing: 0.5px;
-  text-shadow: 0 0 10px rgba(0, 191, 255, 0.3);
+  color: #3b82f6; /* Blue */
+  letter-spacing: -0.5px;
+  cursor: pointer;
 }
 
-.new-doc-button {
-  background: #00BFFF;
-  color: #0a0a0a;
+.new-document-btn {
+  background: #3b82f6;
+  color: white;
   border: none;
   padding: 10px 20px;
   border-radius: 6px;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.new-doc-button:hover {
-  background: #1E90FF;
+.new-document-btn:hover {
+  background: #2563eb;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 191, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
-.new-doc-button:active {
+.new-document-btn:active {
   transform: translateY(0);
 }

@@ -2,31 +2,19 @@ import React from 'react';
 import './Header.css';
 
 interface HeaderProps {
-  onReset?: () => void;
-  hasDocument?: boolean;
+  onNewDocument?: () => void;
+  showNewButton?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ onReset, hasDocument }) => {
-  const handleNewDocument = () => {
-    if (window.confirm('Start a new document? This will clear the current session.')) {
-      if (onReset) {
-        onReset();
-      }
-      window.location.reload();
-    }
-  };
-
+const Header: React.FC<HeaderProps> = ({ onNewDocument, showNewButton = false }) => {
   return (
-    <header className="header">
-      <div className="header-content">
-        <h1 className="header-title">Flade</h1>
-        
-        {hasDocument && (
-          <button onClick={handleNewDocument} className="new-doc-button">
-            📄 New Document
-          </button>
-        )}
-      </div>
+    <header className="app-header">
+      <div className="header-logo">Flade</div>
+      {showNewButton && (
+        <button className="new-document-btn" onClick={onNewDocument}>
+          📄 New Document
+        </button>
+      )}
     </header>
   );
 };

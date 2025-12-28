@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { queryDocument, getProcessingStatus } from '../../services/api';
 import ReactMarkdown from 'react-markdown';
 import './ChatInterface.css';
+import SuggestedQuestions from './SuggestedQuestions';
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   sources?: any[];
   retrieval_method?: string;
+  flowchart?: string;
 }
 
 interface ChatInterfaceProps {
@@ -27,6 +29,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<any>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Poll processing status
@@ -41,17 +44,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         if (status.status === 'completed') {
           clearInterval(pollInterval);
           onProcessingComplete();
-          
-          // SIMPLE SUCCESS MESSAGE
           setMessages([{
             role: 'assistant',
-            content: `✅ **Ready to chat about ${documentName}!**\n\nAsk me anything about this manual.`
+            content: `✓ ${documentName} has been processed successfully!\n\n` +
+              `**Statistics:**\n` +
+              `- ${status.chunks_processed} text chunks created\n` +
+              `- ${status.entities_extracted} entities extracted\n` +
+              `- ${status.relationships_created} relationships mapped\n\n` +
+              `You can now ask me questions about the manual!`
           }]);
+          setShowSuggestions(true);
         } else if (status.status === 'failed') {
           clearInterval(pollInterval);
           setMessages([{
             role: 'assistant',
             content: `❌ Processing failed: ${status.error_message}`
+          }]);
+        } else if (status.status === 'rejected') {
+          // REJECTION MESSAGE - Show in UI!
+          clearInterval(pollInterval);
+          setMessages([{
+            role: 'system',
+            content: status.error_message || 'Document type not supported'
           }]);
         }
       } catch (err) {
@@ -79,20 +93,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+    setShowSuggestions(false); // Hide suggestions after first question
 
     try {
-      // REMOVED retrieval_method parameter!
-        const response = await queryDocument({
-          document_id: documentId,
-          question: input,
-          include_context: false  
-        });
+      const response = await queryDocument({
+        document_id: documentId,
+        question: input,
+        include_context: false
+        // Removed retrieval_method - not in interface
+      });
 
       const assistantMessage: Message = {
         role: 'assistant',
         content: response.answer,
         sources: response.sources,
-        retrieval_method: response.retrieval_method
+        retrieval_method: response.retrieval_method,
+        flowchart: response.flowchart
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -107,10 +123,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  const handleQuestionClick = (question: string) => {
+    setInput(question);
+    // Auto-submit
+    setTimeout(() => {
+      const form = document.querySelector('.input-form') as HTMLFormElement;
+      if (form) {
+        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
+    }, 100);
+  };
+
   return (
     <div className="chat-interface">
       <div className="chat-header">
-        <h2>📄 {documentName}</h2>
+        <h2>{documentName}</h2>
         {isProcessing && processingStatus && (
           <div className="processing-badge">
             Processing... {processingStatus.progress_percent}%
@@ -135,21 +162,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div key={idx} className={`message ${msg.role}`}>
             <div className="message-content">
               <ReactMarkdown>{msg.content}</ReactMarkdown>
-              
+
               {msg.sources && msg.sources.length > 0 && (
                 <div className="sources">
                   <p className="sources-label">Sources:</p>
-                  {msg.sources
-                    .filter(source => source && (source.name || source.title))
-                    .map((source, i) => (
+                  {msg.sources.map((source, i) => (
                     <div key={i} className="source-item">
-                        {source.type === 'web' ? (
-                        <a href={source.url} target="_blank" rel="noopener noreferrer">
-                            🌐 {source.title}
-                        </a>
-                        ) : (
-                          `📄 ${source.name} (${source.type || 'Unknown'})`
-                      )}
+                      {source.name} ({source.type})
                     </div>
                   ))}
                 </div>
@@ -174,6 +193,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* Suggested Questions */}
+        {showSuggestions && messages.length <= 1 && !loading && (
+          <SuggestedQuestions onQuestionClick={handleQuestionClick} />
         )}
 
         <div ref={messagesEndRef} />
