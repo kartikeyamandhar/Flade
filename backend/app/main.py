@@ -1,7 +1,6 @@
 """
 Main FastAPI application.
 Sets up the API server with CORS, logging, and database connections.
-UPDATED: Includes API router from Phase 4
 """
 
 from fastapi import FastAPI

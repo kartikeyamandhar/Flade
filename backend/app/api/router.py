@@ -1,6 +1,15 @@
 """
-API Router - FIXED for async event loop.
-Uses ThreadPoolExecutor to avoid asyncio.run() conflicts.
+All HTTP endpoints live here
+
+This file handles:
+- /upload - Accept PDF, start background processing
+- /query - Ask questions, get answers
+- /status - Check if document is done processing
+- /stats - Get graph statistics (node counts, etc.)
+
+The router validates requests and hands off to services.
+Document processing happens in background threads 
+
 """
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
@@ -24,7 +33,7 @@ from app.models.schemas import (
     DocumentStatus
 )
 from app.services.document_service import DocumentService
-from app.services.retriever import SimpleAsyncRetriever
+from app.services.retriever import EnhancedRetriever
 from app.core.config import settings
 from app.core.database import db
 
@@ -35,7 +44,7 @@ api_router = APIRouter()
 
 # Services
 doc_service = DocumentService()
-retriever = SimpleAsyncRetriever()
+retriever = EnhancedRetriever()
 
 # Thread pool for blocking operations
 executor = ThreadPoolExecutor(max_workers=3)
@@ -49,13 +58,7 @@ async def upload_document(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = None
 ):
-    """
-    Upload and process a PDF document.
-    
-    - **file**: PDF file to upload
-    
-    Returns document ID and processing status.
-    """
+    """Upload and process a PDF document"""
     try:
         # Validate file type
         if not file.filename.endswith('.pdf'):
@@ -92,7 +95,9 @@ async def upload_document(
             "size": file_size,
             "pages": num_pages,
             "status": DocumentStatus.UPLOADED,
-            "upload_date": datetime.now()
+            "upload_date": datetime.now(),
+            "progress_percent": 0,
+            "current_step": "Uploaded"
         }
         
         # Start background processing in thread pool
@@ -119,7 +124,7 @@ async def upload_document(
 def process_document_sync(file_path: str, document_id: str):
     """
     Synchronous document processing (runs in thread pool).
-    This avoids asyncio.run() conflicts.
+    PHASE 2 FIX: Added progress callback for real-time updates.
     """
     try:
         logger.info(f"Starting background processing for {document_id}")
@@ -133,11 +138,18 @@ def process_document_sync(file_path: str, document_id: str):
         
         service = DocumentService()
         
-        # Call the synchronous version
-        # We'll need to modify document_service to have a sync version
+        # PHASE 2 FIX: Progress callback to update documents_db in real-time
+        def progress_callback(status_dict):
+            """Update documents_db with latest progress"""
+            if document_id in documents_db:
+                documents_db[document_id].update(status_dict)
+                logger.debug(f"Progress: {status_dict['progress_percent']}% - {status_dict['current_step']}")
+        
+        # Call with progress callback
         result = service.process_document_sync(
             file_path=file_path,
             document_id=document_id,
+            progress_callback=progress_callback  # ← PHASE 2 FIX!
         )
         
         # Update document status
@@ -148,18 +160,29 @@ def process_document_sync(file_path: str, document_id: str):
             })
         
         logger.info(f"✓ Background processing complete for {document_id}")
-    
+        
     except Exception as e:
-        logger.error(f"Background processing failed for {document_id}: {e}")
-        if document_id in documents_db:
-            documents_db[document_id]["status"] = DocumentStatus.FAILED
-            documents_db[document_id]["error"] = str(e)
+        error_str = str(e)
+        
+        # Check if rejection
+        if error_str.startswith("DOCUMENT_TYPE_REJECTED:"):
+            parts = error_str.split(":", 2)
+            rejection_msg = parts[2] if len(parts) > 2 else "Document type not supported"
+            
+            logger.warning(f"📄 Document {document_id} rejected")
+            if document_id in documents_db:
+                documents_db[document_id]["status"] = DocumentStatus.FAILED
+                documents_db[document_id]["error"] = rejection_msg
+                documents_db[document_id]["error_message"] = rejection_msg
+        else:
+            logger.error(f"Background processing failed for {document_id}: {e}")
+            if document_id in documents_db:
+                documents_db[document_id]["status"] = DocumentStatus.FAILED
+                documents_db[document_id]["error"] = str(e)
 
 
 async def process_document_in_thread(file_path: str, document_id: str):
-    """
-    Run document processing in a thread pool to avoid event loop conflicts.
-    """
+    """Run document processing in a thread pool to avoid event loop conflicts"""
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
         executor,
@@ -171,13 +194,7 @@ async def process_document_in_thread(file_path: str, document_id: str):
 
 @api_router.get("/documents/{document_id}/status", response_model=ProcessingProgress)
 async def get_processing_status(document_id: str):
-    """
-    Get processing status for a document.
-    
-    - **document_id**: Unique document identifier
-    
-    Returns current processing progress.
-    """
+    """Get processing status for a document"""
     try:
         # Get from service
         status = doc_service.get_processing_status(document_id)
@@ -187,15 +204,16 @@ async def get_processing_status(document_id: str):
             if document_id in documents_db:
                 doc_info = documents_db[document_id]
                 status = {
-                    "document_id": document_id,
-                    "status": doc_info["status"],
-                    "progress_percent": 100 if doc_info["status"] == "completed" else 0,
-                    "current_step": "Complete" if doc_info["status"] == "completed" else "Unknown",
-                    "chunks_processed": doc_info.get("chunks", 0),
-                    "total_chunks": doc_info.get("chunks", 0),
-                    "entities_extracted": 0,
-                    "relationships_created": 0,
-                }
+                            "document_id": document_id,
+                            "status": doc_info["status"],
+                            "progress_percent": doc_info.get("progress_percent", 100 if doc_info["status"] == "completed" else 0),
+                            "current_step": doc_info.get("current_step", "Complete" if doc_info["status"] == "completed" else "Unknown"),
+                            "chunks_processed": doc_info.get("chunks", 0),
+                            "total_chunks": doc_info.get("chunks", 0),
+                            "entities_extracted": doc_info.get("entities", 0),
+                            "relationships_created": doc_info.get("relationships", 0),
+                            "error_message": doc_info.get("error") or doc_info.get("error_message")
+                        }
             else:
                 raise HTTPException(404, "Document not found")
         
@@ -210,16 +228,7 @@ async def get_processing_status(document_id: str):
 
 @api_router.post("/query", response_model=QueryResponse)
 async def query_document(request: QueryRequest):
-    """
-    Query a processed document.
-    
-    - **document_id**: Document to query
-    - **question**: User's question
-    - **include_context**: Include retrieved context (optional)
-    - **retrieval_method**: Specific method or "auto" (optional)
-    
-    Returns answer with sources and metadata.
-    """
+    """Query a processed document"""
     try:
         # Check document exists and is processed
         if request.document_id not in documents_db:
@@ -233,7 +242,7 @@ async def query_document(request: QueryRequest):
         result = await retriever.aquery(
             question=request.question,
             document_id=request.document_id,
-            include_context=request.include_context  # ✅ Clean!
+            include_context=request.include_context
         )
         
         return QueryResponse(
@@ -252,11 +261,7 @@ async def query_document(request: QueryRequest):
 
 @api_router.get("/documents", response_model=list[DocumentInfo])
 async def list_documents():
-    """
-    List all uploaded documents.
-    
-    Returns list of all documents with their metadata.
-    """
+    """List all uploaded documents"""
     try:
         docs = []
         for doc_id, doc_info in documents_db.items():
@@ -266,7 +271,7 @@ async def list_documents():
                 upload_date=doc_info.get("upload_date", datetime.now()),
                 status=doc_info["status"],
                 pages=doc_info.get("pages", 0),
-                graph_stats=None  # Would fetch actual stats in production
+                graph_stats=None
             ))
         
         return docs
@@ -278,13 +283,7 @@ async def list_documents():
 
 @api_router.get("/graph/{document_id}/stats", response_model=GraphStats)
 async def get_graph_stats(document_id: str):
-    """
-    Get graph statistics for a document.
-    
-    - **document_id**: Document identifier
-    
-    Returns node and relationship counts by type.
-    """
+    """Get graph statistics for a document"""
     try:
         # This would query Neo4j for actual stats
         # Simplified for learning project
@@ -326,17 +325,14 @@ async def get_graph_stats(document_id: str):
 
 @api_router.get("/health")
 async def health_check():
-    """
-    Health check endpoint.
-    
-    Returns system health status.
-    """
+    """Health check endpoint"""
     return {
         "status": "healthy",
         "version": settings.VERSION,
         "neo4j_connected": db.get_driver() is not None,
         "documents_count": len(documents_db)
     }
+
 
 @api_router.get("/graph/{document_id}/data")
 async def get_graph_data(document_id: str, limit: int = 100):
@@ -372,4 +368,39 @@ async def get_graph_data(document_id: str, limit: int = 100):
     
     except Exception as e:
         logger.error(f"Failed to get graph data: {e}")
+        raise HTTPException(500, str(e))
+    
+@api_router.get("/graph/{document_id}/entities")
+async def get_document_entities(document_id: str):
+    """Get actual entities from the knowledge graph for content summary"""
+    try:
+        driver = db.get_driver()
+        with driver.session() as session:
+            # Fetch all entities for this document
+            query = """
+            MATCH (n)
+            WHERE n.document_id = $doc_id
+            RETURN 
+                n.name as name,
+                labels(n)[0] as type,
+                n.text as description
+            ORDER BY n.name
+            LIMIT 200
+            """
+            
+            result = session.run(query, doc_id=document_id)
+            entities = []
+            
+            for record in result:
+                entities.append({
+                    "name": record["name"],
+                    "type": record["type"],
+                    "description": record.get("description", "")
+                })
+            
+            logger.info(f"Fetched {len(entities)} entities for {document_id}")
+            return entities
+    
+    except Exception as e:
+        logger.error(f"Failed to fetch entities: {e}")
         raise HTTPException(500, str(e))

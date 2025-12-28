@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import FileUpload from './components/Upload/FileUpload';
 import ChatInterface from './components/Chat/ChatInterface';
-import DocumentPanel from './components/DocumentPanel/DocumentPanel';
+import ContentSummary from './components/Graph/ContentSummary';
 import Header from './components/Layout/Header';
 
 interface AppState {
@@ -37,14 +37,7 @@ function App() {
     }));
   };
 
-  const handleQuestionClick = (question: string) => {
-    // This will be passed to ChatInterface to auto-fill the question
-    const event = new CustomEvent('auto-question', { detail: question });
-    window.dispatchEvent(event);
-  };
-
-  const handleReset = () => {
-    // Reset to upload screen
+  const handleNewDocument = () => {
     setState({
       currentDocumentId: null,
       documentName: null,
@@ -56,26 +49,24 @@ function App() {
   return (
     <div className="App">
       <Header 
-        onReset={handleReset}
-        hasDocument={!!state.currentDocumentId}
+        onNewDocument={handleNewDocument}
+        showNewButton={!!state.currentDocumentId}
       />
       
       <div className="main-container">
         {!state.currentDocumentId ? (
           <div className="upload-section">
-            <h1>Knowledge Graph Builder</h1>
+            <h1>Flade</h1>
             <p>Upload any technical manual to create an intelligent knowledge graph</p>
             <FileUpload onUploadComplete={handleUploadComplete} />
           </div>
         ) : (
           <div className="workspace">
-            {/* Left panel - Document Intelligence */}
-            <div className="document-panel-container">
-              <DocumentPanel
+            {/* Left panel - Content summary */}
+            <div className="content-panel">
+              <ContentSummary
                 documentId={state.currentDocumentId}
-                documentName={state.documentName || ''}
                 isReady={state.isReady}
-                onQuestionClick={handleQuestionClick}
               />
             </div>
             

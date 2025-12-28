@@ -1,3 +1,12 @@
+"""
+Orchestrates the flow: PDF upload → text extraction → type validation → 
+chunking → knowledge graph building → metadata storage.
+
+Runs in background threads. Tracks progress via in-memory dict that gets polled 
+by the frontend. Validates document type before processing to reject non-manuals 
+and save API costs.
+"""
+
 import uuid
 import json
 from pathlib import Path
@@ -6,13 +15,15 @@ import logging
 from app.utils.pdf_processor import PDFProcessor
 from app.utils.chunker import TextChunker
 from app.services.graph_builder import KnowledgeGraphBuilder
+from app.services.document_validator import DocumentTypeValidator
 from app.core.config import settings
+from app.core.database import db
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    """Document processing service with proper stats reporting"""
+    """Document processing service with type validation"""
     
     def __init__(self):
         self.pdf_processor = PDFProcessor()
@@ -21,6 +32,7 @@ class DocumentService:
             chunk_overlap=settings.CHUNK_OVERLAP
         )
         self.graph_builder = KnowledgeGraphBuilder()
+        self.validator = DocumentTypeValidator(db.get_llm())
         
         # Track processing status
         self.processing_status = {}
@@ -31,7 +43,7 @@ class DocumentService:
         document_id: str,
         progress_callback: Callable[[Dict], None] = None
     ) -> Dict:
-        """Process document and report stats correctly"""
+        """Process document with type validation"""
         
         try:
             # Initialize status
@@ -72,7 +84,33 @@ class DocumentService:
             if not full_text or len(full_text.strip()) < 100:
                 raise ValueError("PDF contains insufficient text")
             
-            # Step 3: Chunk text
+            # Step 3: VALIDATE DOCUMENT TYPE (NEW!)
+            update_progress(15, "Validating document type...")
+            
+            import asyncio
+            
+            # Get or create event loop
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run async validation
+            is_procedural, doc_type, rejection_msg = loop.run_until_complete(
+                self.validator.validate_document_type(
+                    full_text[:2000],
+                    Path(file_path).name
+                )
+            )
+            
+            if not is_procedural:
+                logger.warning(f"Document rejected: {doc_type}")
+                raise ValueError(f"DOCUMENT_TYPE_REJECTED:{doc_type}:{rejection_msg}")
+            
+            logger.info(f"✓ Document type validated: {doc_type}")
+            
+            # Step 4: Chunk text
             update_progress(20, "Creating text chunks...")
             chunks = self.chunker.chunk_text(
                 full_text,
@@ -85,7 +123,7 @@ class DocumentService:
             
             update_progress(30, f"Created {len(chunks)} chunks", total_chunks=len(chunks))
             
-            # Step 4: Build graph
+            # Step 5: Build graph
             update_progress(40, "Building knowledge graph...")
             
             def graph_progress(percent: int, message: str):
@@ -98,7 +136,7 @@ class DocumentService:
                 progress_callback=graph_progress
             )
             
-            # CRITICAL: Update stats from graph builder
+            # Update stats
             update_progress(
                 95,
                 "Processing complete!",
@@ -107,7 +145,8 @@ class DocumentService:
                 relationships_created=stats.get('total_relationships', 0)
             )
             
-            # Step 5: Save metadata
+            # Step 6: Save metadata
+            update_progress(95, "Saving document metadata...")
             result = {
                 "document_id": document_id,
                 "filename": Path(file_path).name,
@@ -115,9 +154,11 @@ class DocumentService:
                 "chunks": len(chunks),
                 "entities": stats.get('total_nodes', 0),
                 "relationships": stats.get('total_relationships', 0),
-                "status": "completed"
+                "status": "completed",
+                "document_type": doc_type
             }
             
+            # Save to JSON
             metadata_file = Path(settings.UPLOAD_DIR) / f"{document_id}_metadata.json"
             with open(metadata_file, 'w') as f:
                 json.dump(result, f, indent=2)
@@ -137,8 +178,25 @@ class DocumentService:
             return result
             
         except Exception as e:
-            logger.error(f"Document processing failed: {e}")
-            update_progress(0, "Processing failed", status="failed", error_message=str(e))
+            error_str = str(e)
+            
+            # Check if it's a document type rejection
+            if error_str.startswith("DOCUMENT_TYPE_REJECTED:"):
+                parts = error_str.split(":", 2)
+                doc_type = parts[1] if len(parts) > 1 else "unknown"
+                rejection_msg = parts[2] if len(parts) > 2 else "Document type not supported"
+                
+                update_progress(
+                    0,
+                    "Document type not supported",
+                    status="rejected",
+                    error_message=rejection_msg,
+                    document_type=doc_type
+                )
+            else:
+                logger.error(f"Document processing failed: {e}")
+                update_progress(0, "Processing failed", status="failed", error_message=str(e))
+            
             raise
     
     def get_processing_status(self, document_id: str) -> Dict:
