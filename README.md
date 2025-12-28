@@ -30,6 +30,10 @@ This is why it can handle vague questions and still find relevant info.
 
 
 **Tech Stack:** FastAPI + Neo4j + LlamaIndex + OpenAI (GPT-3.5 + embeddings)
+
+## There's an AI usage disclosure at the very bottom.
+
+I’d strongly recommend going through that before checking out the implementation.
 ---
 
 ## Why This Exists
@@ -601,7 +605,7 @@ Full API docs: http://localhost:8000/docs
 
 ## What's Next
 
-- [] To replace OpenAI with HuggingFace and then push to host.
+- Mainly To replace OpenAI with HuggingFace and then push to host.
 
 **Currently Working On:**
 - [ ] Image extraction from PDFs
@@ -631,10 +635,42 @@ Pull requests welcome.
 - OCR support for scanned docs
 - Multi-language support
 - Hugging Face implementation
+- In-memory storage for demo (to use database in production)
 
 ---
 
 ## Contact
 
 If you found this interesting or have questions about the architecture, feel free to reach out.
+
+---
+
+## AI Usage Disclosure
+
+I used AI tools while building this. Being transparent about where:
+
+**Where AI helped:**
+
+1. **Frontend** - Generated the React components structure. Having AI write the TypeScript saved hours.
+
+2. **FastAPI code assistance** - When I hit async/sync issues or couldn't remember Pydantic syntax, AI helped me write cleaner code faster. Especially the ThreadPoolExecutor setup - tried doing it myself first, got stuck, asked AI for the pattern.
+
+3. **Schema iteration** - This was collaborative. I'd describe what I wanted ("8 entity types for technical manuals"), AI would suggest options, I'd test them on real PDFs, find issues, then iterate. The final schema came from tons of back-and-forth attempts. 
+
+4. **Code comments and documentation** - Wrote the logic myself, then had AI help make comments clearer. Especially the complex parts like the hybrid retrieval engine. My comments were too terse - AI made them actually helpful for someone reading the code.
+
+I try to start every project with production-level code standards - having worked in production systems, I know comments matter. But honestly during development, I comment the top of files and each function by habit. Line by line comments feel like extra work you do later. Which is exactly the problem they should happen during development, not as an afterthought. 
+
+I aimed for production quality from day one with this project, but maintaining that discipline for inline comments is hard when you're iterating fast. AI helped bridge that gap. Write the code, immediately have AI suggest inline comments explaining the "why" not just the "what." Turns out it's faster than going back later and trying to remember why you made certain decisions.
+
+For a project you want others to understand (or yourself in 6 months), this matters. AI didn't write the code, but it made the documentation actually useful without slowing down development.
+
+5. ## DEBUGGING
+
+**Why disclose this?**
+
+The thought process behind using AI, is "could I have written the same code but with more time ?"
+If the answer to the above is No, I did not use the part till I fully understood it.
+
+I used it as a coding partner, not a replacement for thinking.
 

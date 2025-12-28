@@ -58,7 +58,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           clearInterval(pollInterval);
           setMessages([{
             role: 'assistant',
-            content: `❌ Processing failed: ${status.error_message}`
+            content: `Processing failed: ${status.error_message}`
           }]);
         } else if (status.status === 'rejected') {
           // REJECTION MESSAGE - Show in UI!
@@ -116,7 +116,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       console.error('Query error:', err);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '❌ Sorry, I encountered an error processing your question. Please try again.'
+        content: 'Sorry, I encountered an error processing your question. Please try again.'
       }]);
     } finally {
       setLoading(false);

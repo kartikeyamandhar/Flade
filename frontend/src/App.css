@@ -10,7 +10,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #000000; /* Black background */
+  background: #000000; 
   min-height: 100vh;
 }
 
@@ -38,7 +38,7 @@ body {
   margin-bottom: 10px;
   font-weight: 700;
   letter-spacing: -1px;
-  color: #3b82f6; /* Blue Flade */
+  color: #3b82f6; 
 }
 
 .upload-section p {
@@ -64,7 +64,7 @@ body {
 }
 
 .chat-panel {
-  background: #2a2a2a; /* Gray background for chat */
+  background: #2a2a2a; 
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);

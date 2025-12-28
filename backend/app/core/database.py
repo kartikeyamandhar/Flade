@@ -1,7 +1,7 @@
 """
 Database Connection Manager.
 Manages Neo4j, LlamaIndex, and OpenAI connections.
-UPDATED: Fixed OpenAI client initialization for compatibility
+OpenAI client initialization for compatibility
 """
 
 from neo4j import GraphDatabase
