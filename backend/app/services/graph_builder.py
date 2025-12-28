@@ -168,7 +168,7 @@ class KnowledgeGraphBuilder:
         callback: Callable[[int, str], None]
     ) -> List[Dict]:
         """
-        GEMINI IMPROVEMENT: Parallel processing with context windows
+        Parallel processing with context windows
         Processes chunks concurrently and includes sliding context
         """
         loop = asyncio.get_running_loop()
@@ -251,7 +251,7 @@ class KnowledgeGraphBuilder:
     
     def _resolve_entities(self, all_data: List[Dict]) -> tuple:
         """
-        GEMINI IMPROVEMENT: Entity Resolution
+        Entity Resolution
         Merges duplicates like "PS5", "PS5 Console", "PlayStation 5"
         Strategy: Deduplicate by name, keep longest description
         """
@@ -291,7 +291,7 @@ class KnowledgeGraphBuilder:
         document_id: str
     ):
         """
-        GEMINI IMPROVEMENT: Batch save with APOC
+        Batch save with APOC
         Much faster than one-by-one inserts
         """
         driver = db.get_driver()
