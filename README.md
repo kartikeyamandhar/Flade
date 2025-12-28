@@ -16,6 +16,13 @@ When you ask a question, the system:
 - Re-ranks results by relevance
 - Falls back to web search if nothing in the manual matches
 
+<img width="1710" height="745" alt="Image" src="https://github.com/user-attachments/assets/f399d090-60ea-47bc-9f0b-0039402e9e57" />
+<img width="1189" height="786" alt="Image" src="https://github.com/user-attachments/assets/c9c0a3f9-b8e1-4a15-b1e2-4bf4b15faf0c" />
+
+![Image](https://github.com/user-attachments/assets/737728f5-3473-4786-a032-283bb6c4e0ba)
+
+![Image](https://github.com/user-attachments/assets/775addd7-afa7-421c-a27d-a70a30112810)
+
 Example from logs:
 ```
 Query: "What are the steps mentioned"
